@@ -17,10 +17,39 @@ dependencies = [
     "rioxarray (>=0.18.2,<0.19.0)",
     "requests (>=2.32.3,<3.0.0)",
     "contextily (>=1.6.2,<2.0.0)",
-    "seaborn (>=0.13.2,<0.14.0)"
+    "seaborn (>=0.13.2,<0.14.0)",
+    "dagster (>=1.9.11,<2.0.0)",
+    "dagster-webserver (>=1.9.11,<2.0.0)",
+    "ridgeplot (>=0.3.1,<0.4.0)",
+    "nbformat (>=5.10.4,<6.0.0)",
+    "joypy (>=0.2.6,<0.3.0)",
+    "pandas-stubs (>=2.2.3.250308,<3.0.0.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)"
 ]
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.dagster]
+module_name = "cupum.definitions"
+code_location_name = "cupum"
+
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+ignore = ["**/*.ipynb"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "**/dagster"]
+
+
+[tool.ruff]
+extend-exclude = ["**/dagster"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812", "D", "PD901"]
+
+
+[tool.poetry.group.dev.dependencies]
+basedpyright = "^1.29.1"
