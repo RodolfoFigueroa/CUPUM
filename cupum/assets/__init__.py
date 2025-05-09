@@ -1,4 +1,5 @@
 from cupum.assets import (
+    agebs,
     blocks,
     geometries,
     houses,
@@ -9,6 +10,7 @@ from cupum.assets import (
 )
 
 __all__ = [
+    "agebs",
     "blocks",
     "geometries",
     "houses",

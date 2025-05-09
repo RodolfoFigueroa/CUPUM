@@ -4,28 +4,17 @@ import geopandas as gpd
 import pandas as pd
 
 import dagster as dg
-from cupum.assets.common import merge_census_and_geometries
-from cupum.partitions import state_partitions
+from cupum.assets.common import load_loc_geometries, merge_census_and_geometries
+from cupum.partitions import state_and_year_partitions
 from cupum.resources import PathResource
-
-
-@dg.op
-def load_loc_geometries(
-    context: dg.OpExecutionContext, path_resource: PathResource
-) -> gpd.GeoDataFrame:
-    state_geometries_path = (
-        Path(path_resource.population_grids_path) / "initial" / "geometry" / "states"
-    )
-    geom_path = next(state_geometries_path.glob(f"{context.partition_key}*"))
-    return gpd.read_file(geom_path / f"{context.partition_key}l.shp").set_index(
-        "CVEGEO"
-    )[["AMBITO", "geometry"]]
 
 
 @dg.op
 def load_census_loc(
     context: dg.OpExecutionContext, path_resource: PathResource
 ) -> pd.DataFrame:
+    state, _ = context.partition_key.split("|")
+
     iter_census_path = (
         Path(path_resource.population_grids_path)
         / "initial"
@@ -39,8 +28,8 @@ def load_census_loc(
             iter_census_path,
             usecols=["ENTIDAD", "MUN", "LOC", "POBTOT"],
         )
-        .assign(ENTIDAD=lambda df: df["ENTIDAD"].astype(str).str.rjust(2, "0"))
-        .query(f"ENTIDAD == '{context.partition_key}'")
+        .assign(ENTIDAD=lambda df: df["ENTIDAD"].astype(str).str.zfill(2))
+        .query(f"ENTIDAD == '{state}'")
         .assign(
             CVEGEO=lambda df: (
                 df["ENTIDAD"].astype(str).str.rjust(2, "0")
@@ -53,7 +42,10 @@ def load_census_loc(
 
 
 @dg.graph_asset(
-    name="base", key_prefix="locs", partitions_def=state_partitions, group_name="locs"
+    name="base",
+    key_prefix="locs",
+    partitions_def=state_and_year_partitions,
+    group_name="locs",
 )
 def locs() -> gpd.GeoDataFrame:
     census = load_census_loc()

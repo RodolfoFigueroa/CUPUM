@@ -1,27 +1,10 @@
-from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 
 import dagster as dg
-from cupum.assets.common import (
-    load_census_blocks_and_houses,
-)
-from cupum.partitions import state_partitions
-from cupum.resources import PathResource
-
-
-@dg.op
-def load_house_geometries(
-    context: dg.OpExecutionContext, path_resource: PathResource
-) -> gpd.GeoDataFrame:
-    state_geometries_path = (
-        Path(path_resource.population_grids_path) / "initial" / "geometry" / "states"
-    )
-    geom_path = next(state_geometries_path.glob(f"{context.partition_key}*"))
-    return gpd.read_file(geom_path / f"{context.partition_key}cd.shp").set_index(
-        "CVEGEO"
-    )[["TIPOMZA", "geometry"]]
+from cupum.assets.common import load_census_blocks_and_houses, load_house_geometries
+from cupum.partitions import state_and_year_partitions
 
 
 @dg.op(out=dg.Out(io_manager_key="gpkg_manager"))
@@ -52,7 +35,7 @@ def merge_houses_census_and_geometries(
 @dg.graph_asset(
     name="base",
     key_prefix="houses",
-    partitions_def=state_partitions,
+    partitions_def=state_and_year_partitions,
     group_name="houses",
 )
 def houses() -> gpd.GeoDataFrame:

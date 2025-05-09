@@ -1,8 +1,12 @@
-from dagster import StaticPartitionsDefinition
+import dagster as dg
 
-state_partitions = StaticPartitionsDefinition([str(i).zfill(2) for i in range(1, 33)])
+state_partitions = dg.StaticPartitionsDefinition(
+    [str(i).zfill(2) for i in range(1, 33)]
+)
 
-zone_partitions = StaticPartitionsDefinition(
+year_partitions = dg.StaticPartitionsDefinition(["2020"])
+
+zone_partitions = dg.StaticPartitionsDefinition(
     [
         "01.1.01",
         "02.1.01",
@@ -74,4 +78,20 @@ zone_partitions = StaticPartitionsDefinition(
         "31.1.01",
         "32.1.01",
     ],
+)
+
+
+year_and_zone_partitions = dg.MultiPartitionsDefinition(
+    {
+        "year": year_partitions,
+        "zone": zone_partitions,
+    }
+)
+
+
+state_and_year_partitions = dg.MultiPartitionsDefinition(
+    {
+        "state": state_partitions,
+        "year": year_partitions,
+    }
 )

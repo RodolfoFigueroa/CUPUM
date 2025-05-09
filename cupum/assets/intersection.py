@@ -3,8 +3,7 @@ from typing import Literal
 import geopandas as gpd
 
 import dagster as dg
-
-from cupum.partitions import zone_partitions
+from cupum.partitions import year_and_zone_partitions
 
 
 def intersect_polygons_factory(
@@ -14,10 +13,10 @@ def intersect_polygons_factory(
         name="intersect_polygons",
         key_prefix=name,
         ins={
-            "mesh": dg.AssetIn([name, "mesh", "pop"]),
+            "mesh": dg.AssetIn([name, "mesh", "pop_coarse"]),
             "geometries": dg.AssetIn([name, "geometries"]),
         },
-        partitions_def=zone_partitions,
+        partitions_def=year_and_zone_partitions,
         io_manager_key="gpkg_manager",
         group_name=name,
     )
@@ -25,18 +24,17 @@ def intersect_polygons_factory(
         mesh: gpd.GeoDataFrame, geometries: gpd.GeoDataFrame
     ) -> gpd.GeoDataFrame:
         mesh = mesh.to_crs("EPSG:6372")
-        geometries = geometries.to_crs("EPSG:6372").assign(orig_area=lambda x: x.geometry.area)
+        geometries = geometries.to_crs("EPSG:6372").assign(
+            orig_area=lambda x: x.geometry.area
+        )
 
-        overlay = geometries.overlay(
-            mesh[["mesh_idx", "geometry"]]
-        ).assign(
+        overlay = geometries.overlay(mesh[["mesh_idx", "geometry"]]).assign(
             new_area=lambda x: x.geometry.area,
             area_frac=lambda x: x.new_area / x.orig_area,
             pop_frac=lambda x: x.POBTOT * x.area_frac,
         )
         return (
-            mesh
-            .set_index("mesh_idx")
+            mesh.set_index("mesh_idx")
             .assign(census_pop=overlay.groupby("mesh_idx")["pop_frac"].sum())
             .reset_index()
         )
@@ -49,10 +47,10 @@ def intersect_points_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefi
         name="intersect_points",
         key_prefix=name,
         ins={
-            "mesh": dg.AssetIn([name, "mesh", "pop"]),
+            "mesh": dg.AssetIn([name, "mesh", "pop_coarse"]),
             "geometries": dg.AssetIn([name, "houses"]),
         },
-        partitions_def=zone_partitions,
+        partitions_def=year_and_zone_partitions,
         io_manager_key="gpkg_manager",
         group_name=name,
     )
@@ -60,14 +58,16 @@ def intersect_points_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefi
         mesh: gpd.GeoDataFrame, geometries: gpd.GeoDataFrame
     ) -> gpd.GeoDataFrame:
         return (
-            mesh
-            .set_index("mesh_idx")
+            mesh.set_index("mesh_idx")
             .assign(
                 census_pop=(
                     mesh[["mesh_idx", "geometry"]]
-                    .sjoin(geometries[["POBTOT", "geometry"]], how="inner", predicate="contains")
-                    .groupby("mesh_idx")
-                    ["POBTOT"]
+                    .sjoin(
+                        geometries[["POBTOT", "geometry"]],
+                        how="inner",
+                        predicate="contains",
+                    )
+                    .groupby("mesh_idx")["POBTOT"]
                     .sum()
                 )
             )
@@ -85,7 +85,7 @@ def intersect_merged_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefi
             "points": dg.AssetIn([name, "intersect_points"]),
             "polygons": dg.AssetIn([name, "intersect_polygons"]),
         },
-        partitions_def=zone_partitions,
+        partitions_def=year_and_zone_partitions,
         io_manager_key="gpkg_manager",
         group_name=name,
     )
@@ -93,14 +93,11 @@ def intersect_merged_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefi
         points: gpd.GeoDataFrame, polygons: gpd.GeoDataFrame
     ) -> gpd.GeoDataFrame:
         return (
-            points
-            .set_index("mesh_idx")
+            points.set_index("mesh_idx")
             .rename(columns={"census_pop": "points_pop"})
             .assign(
-                polygons_pop=(
-                    polygons.set_index("mesh_idx")["census_pop"]
-                ),
-                census_pop=lambda df: df["points_pop"] + df["polygons_pop"]
+                polygons_pop=(polygons.set_index("mesh_idx")["census_pop"]),
+                census_pop=lambda df: df["points_pop"] + df["polygons_pop"],
             )
             .drop(columns=["points_pop", "polygons_pop"])
         )
@@ -108,4 +105,11 @@ def intersect_merged_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefi
     return _asset
 
 
-dassets = [intersect_polygons_factory("GHSL"), intersect_polygons_factory("WORLDPOP"), intersect_points_factory("GHSL"), intersect_points_factory("WORLDPOP"), intersect_merged_factory("GHSL"), intersect_merged_factory("WORLDPOP")]  
+dassets = [
+    intersect_polygons_factory("GHSL"),
+    intersect_polygons_factory("WORLDPOP"),
+    intersect_points_factory("GHSL"),
+    intersect_points_factory("WORLDPOP"),
+    intersect_merged_factory("GHSL"),
+    intersect_merged_factory("WORLDPOP"),
+]

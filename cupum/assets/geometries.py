@@ -4,14 +4,14 @@ import geopandas as gpd
 import pandas as pd
 
 import dagster as dg
-from cupum.partitions import zone_partitions
+from cupum.partitions import year_and_zone_partitions
 
 
 def geometries_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefinition:
     @dg.asset(
         name="geometries",
         key_prefix=name,
-        partitions_def=zone_partitions,
+        partitions_def=year_and_zone_partitions,
         ins={
             "blocks": dg.AssetIn([name, "blocks"]),
             "locs": dg.AssetIn([name, "locs"]),
