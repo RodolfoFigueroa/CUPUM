@@ -1,33 +1,32 @@
-
 import geopandas as gpd
 import pandas as pd
 
 import dagster as dg
 from cupum.assets.common import (
-    load_block_geometries,
-    load_census_blocks_and_houses,
     merge_census_and_geometries,
 )
-from cupum.partitions import state_and_year_partitions
+from cupum.assets.load.census import load_census_blocks_and_houses_2020
+from cupum.assets.load.geometries import load_block_geometries_2020
+from cupum.partitions import state_partitions
 
 
 @dg.graph_asset(
-    name="base",
+    name="base_2020",
     key_prefix="blocks",
-    partitions_def=state_and_year_partitions,
+    partitions_def=state_partitions,
     group_name="blocks",
 )
 def census_blocks() -> gpd.GeoDataFrame:
-    census = load_census_blocks_and_houses()
-    geometries = load_block_geometries()
+    census = load_census_blocks_and_houses_2020()
+    geometries = load_block_geometries_2020()
     return merge_census_and_geometries(census, geometries)
 
 
 @dg.asset(
-    name="cut",
+    name="cut_2020",
     key_prefix="blocks",
-    ins={"census_blocks": dg.AssetIn(["blocks", "base"])},
-    partitions_def=state_and_year_partitions,
+    ins={"census_blocks": dg.AssetIn(["blocks", "base_2020"])},
+    partitions_def=state_partitions,
     io_manager_key="gpkg_manager",
     group_name="blocks",
 )

@@ -4,8 +4,11 @@ from cupum.assets import (
     geometries,
     houses,
     intersection,
+    load,
     locs,
+    merged_years,
     mesh,
+    stats,
     zoned,
 )
 
@@ -15,7 +18,10 @@ __all__ = [
     "geometries",
     "houses",
     "intersection",
+    "load",
     "locs",
+    "merged_years",
     "mesh",
+    "stats",
     "zoned",
 ]

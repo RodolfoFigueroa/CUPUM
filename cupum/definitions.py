@@ -10,10 +10,13 @@ path_resource = PathResource(
     geostatistical_framework_path=dg.EnvVar("GEOSTATISTICAL_FRAMEWORK_PATH"),
 )
 ghsl_attributes = RasterAttributesResource(
-    path=dg.EnvVar("GHSL_PATH"), nodata=-200, subpath="POP_1000", subpath_fine="POP_100"
+    path=dg.EnvVar("GHSL_PATH"), subpath="POP_1000", subpath_fine="POP_100"
+)
+landscan_attributes = RasterAttributesResource(
+    path=dg.EnvVar("LANDSCAN_PATH"), subpath="GLOBAL", subpath_fine=None
 )
 worldpop_attributes = RasterAttributesResource(
-    path=dg.EnvVar("WORLDPOP_PATH"), nodata=-99999, subpath="1000", subpath_fine="100"
+    path=dg.EnvVar("WORLDPOP_PATH"), subpath="1000", subpath_fine="100"
 )
 
 # Managers
@@ -27,19 +30,23 @@ defs = dg.Definitions(
         list(
             dg.load_assets_from_modules(
                 [
-                    assets.agebs,
-                    assets.blocks,
                     assets.geometries,
-                    assets.houses,
                     assets.intersection,
                     assets.zoned,
-                    assets.locs,
+                    assets.merged_years,
                     assets.mesh,
+                    assets.stats,
                 ]
             )
         )
+        + list(dg.load_assets_from_package_module(assets.blocks))
+        + list(dg.load_assets_from_package_module(assets.houses))
+        + list(dg.load_assets_from_package_module(assets.locs))
+        + list(dg.load_assets_from_package_module(assets.load))
+        + list(dg.load_assets_from_package_module(assets.agebs))
     ),
     resources={
+        "landscan_attributes": landscan_attributes,
         "path_resource": path_resource,
         "worldpop_attributes": worldpop_attributes,
         "ghsl_attributes": ghsl_attributes,

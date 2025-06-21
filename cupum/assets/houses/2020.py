@@ -1,10 +1,10 @@
-
 import geopandas as gpd
 import pandas as pd
 
 import dagster as dg
-from cupum.assets.common import load_census_blocks_and_houses, load_house_geometries
-from cupum.partitions import state_and_year_partitions
+from cupum.assets.load.census import load_census_blocks_and_houses_2020
+from cupum.assets.load.geometries import load_house_geometries_2020
+from cupum.partitions import state_partitions
 
 
 @dg.op(out=dg.Out(io_manager_key="gpkg_manager"))
@@ -33,12 +33,12 @@ def merge_houses_census_and_geometries(
 
 
 @dg.graph_asset(
-    name="base",
+    name="2020",
     key_prefix="houses",
-    partitions_def=state_and_year_partitions,
+    partitions_def=state_partitions,
     group_name="houses",
 )
-def houses() -> gpd.GeoDataFrame:
-    geometries = load_house_geometries()
-    census = load_census_blocks_and_houses()
+def houses_2020() -> gpd.GeoDataFrame:
+    geometries = load_house_geometries_2020()
+    census = load_census_blocks_and_houses_2020()
     return merge_houses_census_and_geometries(geometries, census)

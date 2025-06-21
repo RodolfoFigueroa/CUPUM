@@ -4,7 +4,7 @@ state_partitions = dg.StaticPartitionsDefinition(
     [str(i).zfill(2) for i in range(1, 33)]
 )
 
-year_partitions = dg.StaticPartitionsDefinition(["2020"])
+year_partitions = dg.StaticPartitionsDefinition(["2010", "2020"])
 
 zone_partitions = dg.StaticPartitionsDefinition(
     [

@@ -9,6 +9,5 @@ class PathResource(ConfigurableResource):
 
 class RasterAttributesResource(ConfigurableResource):
     path: str
-    nodata: int
     subpath: str
-    subpath_fine: str
+    subpath_fine: str | None

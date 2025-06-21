@@ -7,17 +7,21 @@ import dagster as dg
 from cupum.partitions import year_and_zone_partitions
 
 
-def geometries_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefinition:
+def geometries_factory(
+    name: Literal["GHSL", "LANDSCAN", "WORLDPOP"],
+) -> dg.AssetsDefinition:
+    name_ext = f"{name}_coarse"
+
     @dg.asset(
         name="geometries",
-        key_prefix=name,
+        key_prefix=name_ext,
         partitions_def=year_and_zone_partitions,
         ins={
-            "blocks": dg.AssetIn([name, "blocks"]),
-            "locs": dg.AssetIn([name, "locs"]),
+            "blocks": dg.AssetIn([name_ext, "blocks"]),
+            "locs": dg.AssetIn([name_ext, "locs"]),
         },
         io_manager_key="gpkg_manager",
-        group_name=f"{name}",
+        group_name=name_ext,
     )
     def _asset(blocks: gpd.GeoDataFrame, locs: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         return gpd.GeoDataFrame(
@@ -32,4 +36,8 @@ def geometries_factory(name: Literal["GHSL", "WORLDPOP"]) -> dg.AssetsDefinition
     return _asset
 
 
-dassets = [geometries_factory("GHSL"), geometries_factory("WORLDPOP")]
+dassets = [
+    geometries_factory("GHSL"),
+    geometries_factory("WORLDPOP"),
+    geometries_factory("LANDSCAN"),
+]

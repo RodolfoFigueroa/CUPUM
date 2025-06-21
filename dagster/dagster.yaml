@@ -7,3 +7,6 @@ run_coordinator:
       - key: 'concurrency'
         value: 'limited'
         limit: 5
+      - key: 'concurrency'
+        value: 'very_limited'
+        limit: 3

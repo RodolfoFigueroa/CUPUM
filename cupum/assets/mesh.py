@@ -9,55 +9,71 @@ import rasterio.mask as rio_mask
 import shapely
 
 import dagster as dg
-from cupum.partitions import year_and_zone_partitions, zone_partitions
+from cupum.partitions import year_and_zone_partitions
 from cupum.resources import PathResource, RasterAttributesResource
 
 
-def load_agebs(zone: str, path_resource: PathResource) -> gpd.GeoDataFrame:
+def load_agebs(zone: str, year: int, path_resource: PathResource) -> gpd.GeoDataFrame:
     agebs_path = (
         Path(path_resource.population_grids_path)
         / "final"
         / "zone_agebs"
         / "shaped"
-        / "2020"
+        / str(year)
         / f"{zone}.gpkg"
     )
     return gpd.read_file(agebs_path)
 
 
-def raw_mesh_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal["coarse", "fine"]) -> dg.AssetsDefinition:
+def raw_mesh_factory(
+    name: Literal["GHSL", "WORLDPOP", "LANDSCAN"], mesh_type: Literal["coarse", "fine"]
+) -> dg.AssetsDefinition:
+    name_ext = f"{name}_{mesh_type}"
+
     if name == "GHSL":
         resource_key = "ghsl_attributes"
     elif name == "WORLDPOP":
         resource_key = "worldpop_attributes"
+    elif name == "LANDSCAN":
+        resource_key = "landscan_attributes"
 
     @dg.asset(
-        name=mesh_type,
-        key_prefix=[name, "mesh"],
-        partitions_def=zone_partitions,
+        name="base",
+        key_prefix=[name_ext, "mesh"],
+        partitions_def=year_and_zone_partitions,
         required_resource_keys={"path_resource", resource_key},
         io_manager_key="gpkg_manager",
-        group_name=f"{name}_mesh_{mesh_type}",
+        group_name=name_ext,
     )
     def _asset(context: dg.AssetExecutionContext) -> gpd.GeoDataFrame:
+        year, zone = context.partition_key.split("|")
+        year = int(year)
+
         path_resource = context.resources.path_resource
         attributes_resource: RasterAttributesResource = getattr(
             context.resources, resource_key
         )
 
-        df_agebs = load_agebs(context.partition_key, path_resource)
+        df_agebs = load_agebs(zone, year, path_resource)
 
         if mesh_type == "coarse":
             raster_path = (
-                Path(attributes_resource.path) / attributes_resource.subpath / "2020.tif"
+                Path(attributes_resource.path)
+                / attributes_resource.subpath
+                / f"{year}.tif"
             )
         elif mesh_type == "fine":
-            raster_path = Path(attributes_resource.path) / attributes_resource.subpath_fine / "2020.tif"
-        else:
-            err = "Invalid mesh type"
-            raise ValueError(err)
+            if attributes_resource.subpath_fine is None:
+                err = "Fine mesh not available for this resource"
+                raise ValueError(err)
 
-        with rio.open(raster_path, nodata=attributes_resource.nodata) as ds:
+            raster_path = (
+                Path(attributes_resource.path)
+                / attributes_resource.subpath_fine
+                / f"{year}.tif"
+            )
+
+        with rio.open(raster_path) as ds:
             crs = ds.crs
             df_agebs = df_agebs.to_crs(crs)
 
@@ -67,7 +83,6 @@ def raw_mesh_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal["coar
             data, transform = rio_mask.mask(
                 ds,
                 [bbox],
-                nodata=attributes_resource.nodata,
                 crop=True,
             )
             data = data.squeeze()
@@ -92,20 +107,26 @@ def raw_mesh_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal["coar
     return _asset
 
 
-def mesh_with_pop_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal["coarse", "fine"]) -> dg.AssetsDefinition:
+def mesh_with_pop_factory(
+    name: Literal["GHSL", "WORLDPOP", "LANDSCAN"], mesh_type: Literal["coarse", "fine"]
+) -> dg.AssetsDefinition:
+    name_ext = f"{name}_{mesh_type}"
+
     if name == "GHSL":
         resource_key = "ghsl_attributes"
     elif name == "WORLDPOP":
         resource_key = "worldpop_attributes"
+    elif name == "LANDSCAN":
+        resource_key = "landscan_attributes"
 
     @dg.asset(
-        name=f"pop_{mesh_type}",
-        key_prefix=[name, "mesh"],
-        ins={"mesh": dg.AssetIn([name, "mesh", mesh_type])},
+        name="pop",
+        key_prefix=[name_ext, "mesh"],
+        ins={"mesh": dg.AssetIn([name_ext, "mesh", "base"])},
         required_resource_keys={resource_key},
         partitions_def=year_and_zone_partitions,
         io_manager_key="gpkg_manager",
-        group_name=f"{name}_mesh_{mesh_type}",
+        group_name=name_ext,
     )
     def _asset(
         context: dg.AssetExecutionContext, mesh: gpd.GeoDataFrame
@@ -118,14 +139,24 @@ def mesh_with_pop_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal[
 
         if mesh_type == "coarse":
             raster_path = (
-                Path(attributes_resource.path) / attributes_resource.subpath / "2020.tif"
+                Path(attributes_resource.path)
+                / attributes_resource.subpath
+                / f"{year}.tif"
             )
         elif mesh_type == "fine":
-            raster_path = Path(attributes_resource.path) / attributes_resource.subpath_fine / "2020.tif"
+            if attributes_resource.subpath_fine is None:
+                err = "Fine mesh not available for this resource"
+                raise ValueError(err)
+
+            raster_path = (
+                Path(attributes_resource.path)
+                / attributes_resource.subpath_fine
+                / f"{year}.tif"
+            )
         else:
-            err = "Invalid mesh type"
+            err = f"Invalid mesh type: {mesh_type}. Must be 'coarse' or 'fine'."
             raise ValueError(err)
-            
+
         with rio.open(raster_path) as ds:
             centroids = (
                 mesh.to_crs("EPSG:6372")
@@ -133,7 +164,11 @@ def mesh_with_pop_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal[
                 .get_coordinates()
                 .to_numpy()
             )
-            pops = np.array(list(ds.sample(centroids, masked=True))).squeeze()
+            pops = (
+                np.array(list(ds.sample(centroids, masked=True)))
+                .squeeze()
+                .astype(float)
+            )
             pops[pops == ds.nodata] = np.nan
 
         return mesh.assign(pop=pops)
@@ -142,13 +177,14 @@ def mesh_with_pop_factory(name: Literal["GHSL", "WORLDPOP"], mesh_type: Literal[
 
 
 dassets = [
-    raw_mesh_factory("GHSL", "coarse"), 
-    raw_mesh_factory("WORLDPOP", "coarse"),
-    raw_mesh_factory("GHSL", "fine"), 
-    raw_mesh_factory("WORLDPOP", "fine"),
-    
-    mesh_with_pop_factory("GHSL", "coarse"),
-    mesh_with_pop_factory("WORLDPOP", "coarse"),
-    mesh_with_pop_factory("GHSL", "fine"),
-    mesh_with_pop_factory("WORLDPOP", "fine"),
+    raw_mesh_factory("GHSL", mesh_type="coarse"),
+    raw_mesh_factory("WORLDPOP", mesh_type="coarse"),
+    raw_mesh_factory("GHSL", mesh_type="fine"),
+    raw_mesh_factory("WORLDPOP", mesh_type="fine"),
+    raw_mesh_factory("LANDSCAN", mesh_type="coarse"),
+    mesh_with_pop_factory("GHSL", mesh_type="coarse"),
+    mesh_with_pop_factory("WORLDPOP", mesh_type="coarse"),
+    mesh_with_pop_factory("GHSL", mesh_type="fine"),
+    mesh_with_pop_factory("WORLDPOP", mesh_type="fine"),
+    mesh_with_pop_factory("LANDSCAN", mesh_type="coarse"),
 ]
